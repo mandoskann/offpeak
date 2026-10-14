@@ -23,8 +23,20 @@ async def main() -> None:
         tools = await client.list_tools()
         print("Tools:", ", ".join(t.name for t in tools), "\n")
 
-        result = await client.call_tool("get_live_price", {})
-        print(json.dumps(result.data, indent=2))
+        calls = [
+            ("get_live_price", {}),
+            ("get_price_forecast", {"hours": 24}),
+            ("find_cheapest_time", {"duration_hours": 4, "finish_by_hour": 7, "can_split": True, "energy_kwh": 40}),
+            ("find_cheapest_time", {"duration_hours": 2}),
+        ]
+        for name, args in calls:
+            result = await client.call_tool(name, args)
+            print(f"{name}({args})")
+            print("  ->", result.data.get("spoken"), "\n")
+
+        if os.getenv("VERBOSE"):
+            full = await client.call_tool("find_cheapest_time", calls[2][1])
+            print(json.dumps(full.data, indent=2))
 
 
 if __name__ == "__main__":

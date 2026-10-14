@@ -17,7 +17,7 @@ Built for the **Alexa+ track** of the [Build, Ship, Shape: Amazon Developer Hack
 | Day | Milestone | Done |
 |---|---|---|
 | 1 | MCP server (Streamable HTTP) + live ComEd price tool | ✅ |
-| 2 | Full price data layer | ⬜ |
+| 2 | Price forecast + cheapest-time planner | ✅ |
 | 3 | Agent on Amazon Bedrock + Agent Skill | ⬜ |
 | 4 | Autopilot + simulated smart home | ⬜ |
 | 5 | Simulated Alexa+ voice UI | ⬜ |
@@ -33,13 +33,18 @@ Simulated Alexa+ (browser, voice) → Agent (Strands + Claude on Amazon Bedrock)
 ## MCP tools
 | Tool | What it returns |
 |---|---|
-| `get_live_price` | Live price (cents/kWh), current-hour average, level (low/normal/high/spike), 30-min trend, and a spoken sentence |
+| `get_live_price` | Live price (cents/kWh), current-hour average, level (low/normal/high/spike), 30-min trend |
+| `get_price_forecast` | Hourly prices from now forward (today's day-ahead + tomorrow's once published ~4:30pm CT), cheapest and priciest hours |
+| `find_cheapest_time` | Cheapest time to run a job: one block (dishwasher, dryer) or split across hours (EV), with an optional finish-by deadline and dollar estimate |
+| `get_day_prices` | One past day's 24 hourly prices, estimated vs. actual, with peak and low |
+
+Every tool returns a `spoken` field: one short sentence written for a voice assistant to read aloud.
 
 ## Setup
 Requires Python 3.11+.
 
 ```bash
-git clone https://github.com/<your-username>/offpeak.git
+git clone https://github.com/mandoskann/offpeak.git
 cd offpeak
 python3 -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
@@ -75,7 +80,8 @@ npx @modelcontextprotocol/inspector
 ```
 
 ## Data
-- **ComEd Hourly Pricing API:** public, no key. Real-time supply prices that ComEd Hourly Pricing customers pay. See ComEd's API terms of service.
+- **ComEd Hourly Pricing:** public, no key. Real-time 5-minute prices, hourly day-ahead estimates, and settled actuals for ComEd Hourly Pricing customers (PJM ComEd zone). See ComEd's API terms of service.
+- Prices are the **supply** portion only (cents/kWh). Delivery charges are separate and don't depend on the time of day.
 
 ## License
 MIT. See [LICENSE](LICENSE).
