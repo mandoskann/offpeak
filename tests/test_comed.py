@@ -161,3 +161,14 @@ def test_find_cheapest_time_warns_when_tomorrow_unpublished(monkeypatch):
     freeze(monkeypatch, 2026, 10, 14, 18, 0)  # evening: tomorrow published, no warning
     comed.clear_cache()
     assert "note" not in server.find_cheapest_time(4, finish_by_hour=7, can_split=True)
+
+
+def test_agent_skill_is_valid():
+    from offpeak.agent import load_skill
+
+    skill = load_skill()  # strict agentskills.io validation
+    assert skill.name == "offpeak"
+    for tool in ["get_live_price", "get_price_forecast", "find_cheapest_time", "get_day_prices",
+                 "run_autopilot", "get_home_status", "update_settings", "control_device",
+                 "check_for_price_spike", "start_spike_replay"]:
+        assert tool in skill.instructions, f"skill doesn't mention {tool}"

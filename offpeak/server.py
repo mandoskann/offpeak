@@ -17,7 +17,7 @@ from dotenv import load_dotenv
 from fastmcp import FastMCP
 from pydantic import Field
 
-from offpeak import comed, planner
+from offpeak import comed, home, planner
 
 load_dotenv()
 
@@ -30,7 +30,7 @@ mcp = FastMCP(
         "(Chicago area, PJM ComEd zone). Each tool returns a 'spoken' field: a "
         "short sentence suitable for reading aloud on a voice assistant."
     ),
-    version="0.2.0",
+    version="0.4.0",
 )
 
 
@@ -65,6 +65,10 @@ def get_live_price() -> dict:
 
     avg = hour_avg[-1]
     latest = five_min[-1]
+    replay_price, source = home.current_price()
+    if source == "replay":  # demo spike replay is running
+        avg = comed.PricePoint(comed.now(), replay_price)
+        latest = avg
     level = comed.price_level(avg.cents_per_kwh)
 
     recent = five_min[-7:]  # last 30 minutes of 5-minute readings
@@ -78,7 +82,7 @@ def get_live_price() -> dict:
         "level": level,
         "trend_last_30min": trend,
         "change_last_30min_cents": change,
-        "source": "ComEd Hourly Pricing (PJM ComEd zone)",
+        "source": "ComEd Hourly Pricing (PJM ComEd zone)" if source == "live" else "spike replay (demo)",
         "spoken": (
             f"Power is {avg.cents_per_kwh:.1f} cents per kilowatt hour this hour, "
             f"which is {level.split(' (')[0]}, and it's {trend}."
@@ -250,6 +254,99 @@ def get_day_prices(
             f"at {comed.fmt_hour(peak.start)} and bottomed at {low.best:.1f} cents at {comed.fmt_hour(low.start)}."
         ),
     }
+
+
+# ================================================================ autopilot
+@mcp.tool
+def run_autopilot(
+    devices: Annotated[
+        list[str] | None,
+        Field(description="Which jobs to schedule: any of 'ev', 'dishwasher', 'dryer'. Omit for all three."),
+    ] = None,
+) -> dict:
+    """Plan and schedule tonight: put each job in its cheapest hours, within the
+    household's guardrails (EV ready by its deadline and target charge).
+
+    Use for "autopilot tonight", "plan my night", "schedule everything".
+    The plan is saved, so it persists across conversations.
+    """
+    try:
+        return home.run_autopilot(devices)
+    except Exception as exc:
+        return _error(f"Autopilot failed: {exc}")
+
+
+@mcp.tool
+def get_home_status() -> dict:
+    """What the home is doing: each device's state, tonight's saved plan, the
+    household's guardrails, recent autopilot actions, and total money saved.
+
+    Use for "what's running?", "what did you do?", "how much have I saved?",
+    or to recall settings from earlier sessions.
+    """
+    s = home.status()
+    running = [t["name"].lower() for t in s["devices"] if t["state"] in ("charging", "running")]
+    planned = [f"{p['label'].lower()} {p['start']}" for p in s["plan"]]
+    spoken = (f"Right now the {' and '.join(running)} {'is' if len(running) == 1 else 'are'} on. "
+              if running else "Nothing's running right now. ")
+    if planned:
+        spoken += "Planned: " + ", ".join(planned) + ". "
+    spoken += f"Autopilot has saved you ${s['saved_total_dollars']:.2f} so far."
+    s["spoken"] = spoken
+    return s
+
+
+@mcp.tool
+def update_settings(
+    ev_ready_by_hour: Annotated[int | None, Field(ge=0, le=23, description="EV must be charged by this hour (24h)")] = None,
+    ev_target_percent: Annotated[int | None, Field(ge=20, le=100, description="Charge the EV to this percent")] = None,
+    max_indoor_temp_f: Annotated[int | None, Field(ge=60, le=90, description="Never let the house get warmer than this")] = None,
+    min_indoor_temp_f: Annotated[int | None, Field(ge=50, le=80, description="Never let the house get colder than this")] = None,
+    spike_threshold_cents: Annotated[float | None, Field(ge=1, le=100, description="Autopilot reacts on its own above this price")] = None,
+) -> dict:
+    """Change the household's autopilot guardrails. They're saved and apply to
+    every future plan, e.g. "I need the car by 6 tomorrow", "charge to 90 percent",
+    "react if power goes over 8 cents"."""
+    result = home.update_guardrails(
+        ev_ready_by_hour=ev_ready_by_hour, ev_target_percent=ev_target_percent,
+        max_indoor_temp_f=max_indoor_temp_f, min_indoor_temp_f=min_indoor_temp_f,
+        spike_threshold_cents=spike_threshold_cents,
+    )
+    changed = result["changed"]
+    result["spoken"] = ("Got it, I'll remember that." if changed else "Nothing to change.")
+    return result
+
+
+@mcp.tool
+def control_device(
+    device: Annotated[str, Field(description="'ev', 'dishwasher', 'dryer', or 'thermostat'")],
+    action: Annotated[str, Field(description="'start', 'stop', or 'pause'")],
+) -> dict:
+    """Manually start, stop, or pause a device (overrides the autopilot for it)."""
+    return home.control(device.lower().strip(), action.lower().strip())
+
+
+@mcp.tool
+def check_for_price_spike() -> dict:
+    """Check the live price against the household's spike threshold. If it's a
+    spike, the autopilot acts immediately on its own: pauses EV charging and
+    reschedules it before the deadline, delays the dryer, eases the thermostat
+    within comfort limits, and reports the money saved.
+
+    The OffPeak watcher calls this every few minutes; you can also call it.
+    """
+    try:
+        return home.check_for_spike()
+    except Exception as exc:
+        return _error(f"Spike check failed: {exc}")
+
+
+@mcp.tool
+def start_spike_replay() -> dict:
+    """Demo mode: replay an evening price spike so you can watch the autopilot
+    react. Sets the scene (car charging, dryer running), then prices climb past
+    the threshold over the next few checks."""
+    return home.start_spike_demo()
 
 
 def main() -> None:

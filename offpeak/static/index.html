@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OffPeak · Simulated Alexa+</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #07090d; --frame: #12161d; --screen: #0b0f15; --panel: #121821; --line: #1f2834;
+    --text: #e8edf3; --muted: #8592a3; --dim: #56616f;
+    --ring: #2ec5ff; --ring2: #6a5cff;
+    --low: #34d399; --normal: #9fb2c7; --high: #fbbf24; --spike: #f43f5e;
+    --radius: 22px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, sans-serif; }
+  body { min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px 16px 28px; gap: 16px; }
+
+  header { width: min(1080px, 100%); display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; letter-spacing: -0.02em; }
+  .brand .bolt { width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--ring), var(--ring2)); color: #041018; font-size: 17px; }
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip { font-size: 12px; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 6px 11px; background: #0d1219; }
+  .chip b { color: var(--text); font-weight: 600; }
+
+  /* the device */
+  .device { width: min(1080px, 100%); background: var(--frame); border-radius: 34px; padding: 18px;
+    box-shadow: 0 30px 80px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.04); }
+  .screen { background: var(--screen); border-radius: var(--radius); overflow: hidden; position: relative;
+    display: grid; grid-template-columns: 1.05fr 1fr; grid-template-rows: auto auto; min-height: 520px; }
+  .lightbar { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; opacity: 0; transition: opacity .3s;
+    background: linear-gradient(90deg, var(--ring2), var(--ring), var(--ring2)); background-size: 200% 100%; }
+  .screen.listening .lightbar, .screen.thinking .lightbar { opacity: 1; animation: sweep 1.4s linear infinite; }
+  .screen.speaking .lightbar { opacity: 1; animation: pulse 1s ease-in-out infinite; }
+  .screen.alert .lightbar { opacity: 1; background: var(--spike); animation: pulse .6s ease-in-out infinite; }
+  @keyframes sweep { to { background-position: -200% 0; } }
+  @keyframes pulse { 50% { opacity: .35; } }
+
+  .left { padding: 30px 30px 18px; display: flex; flex-direction: column; gap: 18px; border-right: 1px solid var(--line); }
+  .clock { color: var(--muted); font-size: 14px; display: flex; justify-content: space-between; }
+  .heard { color: var(--muted); font-size: 17px; min-height: 24px; }
+  .heard:before { content: "“"; } .heard:after { content: "”"; }
+  .heard:empty:before, .heard:empty:after { content: ""; }
+  .answer { font-size: 27px; line-height: 1.32; font-weight: 500; letter-spacing: -0.015em; flex: 1; }
+  .answer.idle { color: var(--muted); font-weight: 400; font-size: 22px; }
+  .meta { font-size: 12px; color: var(--dim); font-family: "JetBrains Mono", monospace; min-height: 16px; }
+
+  .right { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 18px 18px 16px; flex: 1;
+    display: flex; flex-direction: column; gap: 12px; animation: rise .35s ease; }
+  @keyframes rise { from { transform: translateY(8px); opacity: 0; } }
+  .card h3 { margin: 0; font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .big { font-size: 64px; font-weight: 700; letter-spacing: -0.04em; line-height: 1; }
+  .big small { font-size: 18px; font-weight: 500; color: var(--muted); letter-spacing: 0; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; padding: 5px 10px; border-radius: 999px; background: #0c1118; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .lvl-low { color: var(--low); } .lvl-normal { color: var(--normal); } .lvl-high { color: var(--high); } .lvl-spike { color: var(--spike); }
+  .chart svg { width: 100%; height: 170px; display: block; }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--muted); }
+  .legend span:before { content: ""; display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; background: var(--c); }
+
+  .plan { display: flex; flex-direction: column; gap: 10px; }
+  .job { display: grid; grid-template-columns: 34px 1fr auto; align-items: center; gap: 12px; padding: 10px 12px; background: #0d131b; border-radius: 12px; }
+  .job .ic { font-size: 20px; text-align: center; }
+  .job .t { font-weight: 600; font-size: 15px; } .job .s { color: var(--muted); font-size: 13px; }
+  .job .c { text-align: right; font-size: 13px; color: var(--muted); } .job .c b { color: var(--low); display: block; font-size: 15px; }
+  .total { display: flex; justify-content: space-between; font-size: 14px; color: var(--muted); padding-top: 4px; }
+  .total b { color: var(--low); font-size: 18px; }
+
+  .spikecard { border-color: rgba(244,63,94,.45); background: linear-gradient(180deg, rgba(244,63,94,.10), var(--panel) 60%); }
+  .spikecard .big { color: var(--spike); }
+  .acts { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
+  .acts li { padding: 9px 12px; background: #0d131b; border-radius: 10px; font-size: 14px; }
+  .acts li:before { content: "✓"; color: var(--low); font-weight: 700; margin-right: 8px; }
+
+  /* device tiles */
+  .tiles { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; padding: 0 24px 24px; }
+  .tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; transition: border-color .3s, background .3s; }
+  .tile .n { font-size: 12px; color: var(--muted); display: flex; justify-content: space-between; }
+  .tile .st { font-size: 17px; font-weight: 600; margin-top: 4px; text-transform: capitalize; }
+  .tile .d { font-size: 12px; color: var(--dim); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tile.on { border-color: rgba(46,197,255,.5); } .tile.on .st { color: var(--ring); }
+  .tile.paused, .tile.delayed, .tile.eco { border-color: rgba(251,191,36,.45); } .tile.paused .st, .tile.delayed .st, .tile.eco .st { color: var(--high); }
+  .tile.scheduled .st { color: var(--low); }
+  .tile.saved .st { color: var(--low); font-size: 22px; }
+
+  /* controls */
+  .controls { width: min(1080px, 100%); display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  .bar { display: flex; gap: 10px; width: 100%; align-items: center; }
+  .mic { width: 58px; height: 58px; border-radius: 50%; border: 0; cursor: pointer; flex: none; font-size: 22px;
+    background: radial-gradient(circle at 30% 30%, #3a4656, #1a212b); color: var(--text); box-shadow: 0 0 0 3px #1f2834; transition: box-shadow .2s; }
+  .mic.on { box-shadow: 0 0 0 3px var(--ring), 0 0 28px rgba(46,197,255,.55); }
+  input[type=text] { flex: 1; min-width: 0; background: #0e131a; border: 1px solid var(--line); color: var(--text); border-radius: 14px;
+    padding: 16px 16px; font: inherit; font-size: 16px; outline: none; }
+  input[type=text]:focus { border-color: #2f3c4d; }
+  .btn { background: #141b24; color: var(--text); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+  .btn:hover { border-color: #344255; }
+  .btn.red { color: #ffd2d9; border-color: rgba(244,63,94,.45); background: rgba(244,63,94,.10); }
+  .suggest { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+  .foot { color: var(--dim); font-size: 12px; text-align: center; }
+
+  @media (max-width: 820px) {
+    .screen { grid-template-columns: 1fr; }
+    .left { border-right: 0; border-bottom: 1px solid var(--line); }
+    .tiles { grid-template-columns: repeat(2, 1fr); }
+    .answer { font-size: 22px; } .big { font-size: 48px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand"><div class="bolt">⚡</div>OffPeak <span style="color:var(--muted);font-weight:500">home energy autopilot</span></div>
+  <div class="chips">
+    <span class="chip">Simulated Alexa+ experience</span>
+    <span class="chip" id="model">model …</span>
+    <span class="chip">ComEd hourly pricing · <b id="pricechip">…</b></span>
+  </div>
+</header>
+
+<div class="device">
+  <div class="screen" id="screen">
+    <div class="left">
+      <div class="clock"><span id="clock"></span><span id="source"></span></div>
+      <div class="heard" id="heard"></div>
+      <div class="answer idle" id="answer">Try “Alexa, autopilot tonight” or “When should I charge my car?”</div>
+      <div class="meta" id="meta"></div>
+    </div>
+    <div class="right" id="right"></div>
+    <div class="tiles" id="tiles"></div>
+    <div class="lightbar"></div>
+  </div>
+</div>
+
+<div class="controls">
+  <div class="bar">
+    <button class="mic" id="mic" title="Hold to talk (or press space)">🎙️</button>
+    <input type="text" id="text" placeholder="Ask OffPeak… (press Enter)" autocomplete="off">
+  </div>
+  <div class="suggest">
+    <button class="btn" data-q="What's power costing right now?">Price now</button>
+    <button class="btn" data-q="Autopilot tonight.">Autopilot tonight</button>
+    <button class="btn" data-q="When should I charge my car?">Charge my car</button>
+    <button class="btn" data-q="I need the car by 6 tomorrow and charge it to 90 percent.">Car by 6, 90%</button>
+    <button class="btn" data-q="What's running and how much have I saved?">What's running?</button>
+    <button class="btn red" id="replay">▶ Replay a price spike</button>
+    <button class="btn" id="reset">Reset</button>
+  </div>
+  <div class="foot">Voice works in Chrome. Devices are simulated; prices are live from ComEd unless a replay is running.</div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const screen = $("screen");
+let lastEvent = 0, busy = false, forecastCache = null, pinnedCard = null;
+
+/* ---------- helpers ---------- */
+const level = (c) => c < 3 ? "low" : c < 6 ? "normal" : c < 10 ? "high" : "spike";
+const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
+const mode = (m) => { screen.classList.remove("listening", "thinking", "speaking", "alert"); if (m) screen.classList.add(m); };
+setInterval(() => { $("clock").textContent = new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }); }, 1000);
+
+/* ---------- speech out ---------- */
+let voice = null;
+function pickVoice() {
+  const vs = speechSynthesis.getVoices();
+  voice = vs.find(v => /Samantha|Google US English|Ava|Allison/i.test(v.name)) || vs.find(v => v.lang === "en-US") || null;
+}
+speechSynthesis.onvoiceschanged = pickVoice; pickVoice();
+function say(text, alert = false) {
+  if (!text) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  if (voice) u.voice = voice;
+  u.rate = 1.04;
+  u.onstart = () => mode(alert ? "alert" : "speaking");
+  u.onend = () => mode(null);
+  speechSynthesis.speak(u);
+}
+
+/* ---------- speech in ---------- */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null, listening = false;
+if (SR) {
+  rec = new SR(); rec.lang = "en-US"; rec.interimResults = true; rec.continuous = false;
+  rec.onresult = (e) => {
+    const t = Array.from(e.results).map(r => r[0].transcript).join("");
+    $("heard").textContent = t;
+    if (e.results[e.results.length - 1].isFinal) { stopListening(); ask(t); }
+  };
+  rec.onend = () => { if (listening) stopListening(); };
+  rec.onerror = () => stopListening();
+}
+function startListening() {
+  if (!rec || busy) return;
+  speechSynthesis.cancel(); listening = true; $("mic").classList.add("on"); mode("listening");
+  $("heard").textContent = ""; try { rec.start(); } catch (e) {}
+}
+function stopListening() { listening = false; $("mic").classList.remove("on"); if (!busy) mode(null); try { rec.stop(); } catch (e) {} }
+$("mic").onclick = () => listening ? stopListening() : startListening();
+document.addEventListener("keydown", (e) => {
+  if (e.code === "Space" && document.activeElement !== $("text")) { e.preventDefault(); listening ? stopListening() : startListening(); }
+});
+if (!SR) $("mic").title = "Voice input needs Chrome. Type instead.";
+
+/* ---------- ask ---------- */
+async function ask(text) {
+  text = text.trim(); if (!text || busy) return;
+  busy = true; pinnedCard = null;
+  $("heard").textContent = text; $("text").value = "";
+  $("answer").className = "answer idle"; $("answer").textContent = "…"; $("meta").textContent = ""; mode("thinking");
+  try {
+    const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }) });
+    const j = await r.json();
+    $("answer").className = "answer"; $("answer").textContent = j.answer || "Hmm, I didn't get that.";
+    if (j.error) $("meta").textContent = j.error;
+    else $("meta").textContent = `${(j.tools || []).map(t => t.name).join(" → ") || "no tools"} · ${j.seconds}s`;
+    renderFromTools(j.tools || []);
+    say(j.answer);
+    refresh();
+  } catch (e) {
+    $("answer").textContent = "I couldn't reach the OffPeak server."; mode(null);
+  } finally { busy = false; if (!speechSynthesis.speaking) mode(null); }
+}
+$("text").addEventListener("keydown", (e) => { if (e.key === "Enter") ask($("text").value); });
+document.querySelectorAll("[data-q]").forEach(b => b.onclick = () => ask(b.dataset.q));
+$("replay").onclick = async () => {
+  const j = await (await fetch("/api/replay", { method: "POST" })).json();
+  $("heard").textContent = ""; $("answer").className = "answer"; $("answer").textContent = j.spoken; say(j.spoken);
+  pinnedCard = null; refresh();
+};
+$("reset").onclick = async () => {
+  await fetch("/api/reset", { method: "POST" }); lastEvent = 0; pinnedCard = null; forecastCache = null;
+  $("heard").textContent = ""; $("meta").textContent = "";
+  $("answer").className = "answer idle"; $("answer").textContent = "Try “Alexa, autopilot tonight” or “When should I charge my car?”";
+  refresh(); showForecast();
+};
+
+/* ---------- cards ---------- */
+function card(html, cls = "") { $("right").innerHTML = `<div class="card ${cls}">${html}</div>`; }
+
+function priceCard(p) {
+  if (!p || p.error) return;
+  const c = p.current_hour_average_cents_per_kwh, l = level(c);
+  card(`<h3>Price right now</h3>
+    <div class="big">${c.toFixed(1)}<small> ¢/kWh</small></div>
+    <div><span class="pill lvl-${l}"><span class="dot"></span>${esc(p.level.split(" (")[0])} · ${esc(p.trend_last_30min)}</span></div>
+    <div class="chart" id="mini"></div>`);
+  drawForecast("mini");
+}
+
+async function showForecast(highlight = []) {
+  if (pinnedCard) return;
+  card(`<h3>Next 24 hours · supply price</h3><div class="chart" id="fc"></div>
+    <div class="legend"><span style="--c:var(--low)">low</span><span style="--c:var(--normal)">normal</span><span style="--c:var(--high)">high</span><span style="--c:var(--spike)">spike</span><span style="--c:var(--ring)">scheduled</span></div>`);
+  drawForecast("fc", highlight);
+}
+
+async function drawForecast(el, highlight = []) {
+  try { if (!forecastCache) forecastCache = await (await fetch("/api/forecast")).json(); } catch (e) { return; }
+  const hours = forecastCache.hours || []; const box = $(el); if (!box || !hours.length) return;
+  const W = 600, H = 170, pad = 22, bw = (W - 10) / hours.length, max = Math.max(...hours.map(h => h.cents_per_kwh), 6);
+  const hl = new Set(highlight);
+  let bars = "";
+  hours.forEach((h, i) => {
+    const v = h.cents_per_kwh, bh = Math.max(2, (v / max) * (H - pad - 14)), x = 5 + i * bw, y = H - pad - bh;
+    const color = hl.has(h.start) ? "var(--ring)" : `var(--${level(v)})`;
+    bars += `<rect x="${x + 1.5}" y="${y}" width="${bw - 3}" height="${bh}" rx="3" fill="${color}" opacity="${hl.size && !hl.has(h.start) ? .45 : .9}"><title>${esc(h.start)}: ${v}¢</title></rect>`;
+    if (i % 4 === 0) bars += `<text x="${x + bw / 2}" y="${H - 5}" fill="#56616f" font-size="11" text-anchor="middle">${esc(h.start.split(" ").slice(1).join(" "))}</text>`;
+  });
+  box.innerHTML = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Hourly price forecast">${bars}</svg>`;
+}
+
+const icons = { ev: "🚗", dishwasher: "🍽️", dryer: "👕", thermostat: "🌡️" };
+function planCard(r) {
+  if (!r.plan || !r.plan.length) return;
+  pinnedCard = "plan";
+  const jobs = r.plan.map(p => `<div class="job"><div class="ic">${icons[p.device] || "⚡"}</div>
+      <div><div class="t">${esc(p.label)}</div><div class="s">${esc(p.start)} – ${esc(p.end.replace(/^(tonight|today|tomorrow) at /, ""))} · ${p.avg_cents.toFixed(1)}¢ avg</div></div>
+      <div class="c">$${p.cost_dollars.toFixed(2)}<b>−$${p.saved_dollars.toFixed(2)}</b></div></div>`).join("");
+  card(`<h3>Tonight's autopilot plan</h3><div class="plan">${jobs}</div>
+    <div class="total"><span>vs. running everything now</span><b>save $${r.total_saved_dollars.toFixed(2)}</b></div>
+    <div class="chart" id="fc"></div>`);
+  const hrs = new Set(); r.plan.forEach(p => p.hours.forEach(iso => {
+    const d = new Date(iso); hrs.add(d.toLocaleDateString("en-US", { weekday: "short", timeZone: "America/Chicago" }) + " " +
+      d.toLocaleTimeString("en-US", { hour: "numeric", timeZone: "America/Chicago" }).replace(":00", ""));
+  }));
+  drawForecast("fc", [...hrs]);
+}
+
+function cheapestCard(r) {
+  if (r.error) return;
+  pinnedCard = "cheap";
+  card(`<h3>Best time</h3><div class="big" style="font-size:44px">${esc(r.start.replace(/^(tonight|today|tomorrow) at /, ""))}<small> ${esc((r.start.match(/^(tonight|today|tomorrow)/) || [""])[0])}</small></div>
+    <div><span class="pill lvl-low"><span class="dot"></span>${r.average_cents_per_kwh.toFixed(1)}¢ avg${r.savings_vs_now_percent > 0 ? ` · ${r.savings_vs_now_percent}% cheaper than now` : ""}</span></div>
+    ${r.estimated_cost_dollars != null ? `<div class="s" style="color:var(--muted)">≈ $${r.estimated_cost_dollars.toFixed(2)} vs $${(r.estimated_cost_if_now_dollars ?? r.estimated_cost_dollars).toFixed(2)} now</div>` : ""}
+    ${r.note ? `<div style="color:var(--muted);font-size:13px">${esc(r.note)}</div>` : ""}
+    <div class="chart" id="fc"></div>`);
+  drawForecast("fc");
+}
+
+function spikeCard(ev) {
+  pinnedCard = "spike";
+  card(`<h3>Autopilot acted on its own</h3>
+    <div class="big">${Number(ev.price_cents).toFixed(1)}<small> ¢/kWh spike</small></div>
+    <ul class="acts">${(ev.actions || []).map(a => `<li>${esc(a[0].toUpperCase() + a.slice(1))}</li>`).join("")}</ul>
+    <div class="total"><span>avoided</span><b>$${Number(ev.saved_dollars).toFixed(2)}</b></div>`, "spikecard");
+}
+
+function renderFromTools(tools) {
+  const by = Object.fromEntries(tools.filter(t => t.data).map(t => [t.name, t.data]));
+  if (by.run_autopilot) return planCard(by.run_autopilot);
+  if (by.find_cheapest_time) return cheapestCard(by.find_cheapest_time);
+  if (by.check_for_price_spike && by.check_for_price_spike.spike) return spikeCard(by.check_for_price_spike);
+  if (by.get_live_price) { pinnedCard = "price"; return priceCard(by.get_live_price); }
+  if (by.get_home_status && by.get_home_status.plan && by.get_home_status.plan.length)
+    return planCard({ plan: by.get_home_status.plan, total_saved_dollars: by.get_home_status.plan.reduce((a, p) => a + p.saved_dollars, 0) });
+  pinnedCard = null; showForecast();
+}
+
+/* ---------- live state ---------- */
+function renderTiles(h) {
+  const on = (s) => ["charging", "running"].includes(s);
+  $("tiles").innerHTML = h.devices.map(t => `<div class="tile ${on(t.state) ? "on" : t.state}">
+      <div class="n"><span>${icons[t.id] || ""} ${esc(t.name)}</span></div>
+      <div class="st">${esc(t.state)}</div>
+      <div class="d">${esc(t.scheduled_for ? "→ " + t.scheduled_for : t.detail)}</div></div>`).join("") +
+    `<div class="tile saved"><div class="n"><span>💰 Saved by autopilot</span></div><div class="st">$${h.saved_total_dollars.toFixed(2)}</div>
+      <div class="d">${h.replay_active ? "spike replay running" : "all time"}</div></div>`;
+}
+
+async function refresh() {
+  try {
+    const j = await (await fetch(`/api/state?since=${lastEvent}`)).json();
+    $("model").textContent = j.model;
+    renderTiles(j.home);
+    if (j.price && !j.price.error) {
+      const c = j.price.current_hour_average_cents_per_kwh;
+      $("pricechip").innerHTML = `<span class="lvl-${level(c)}">${c.toFixed(1)}¢</span>`;
+      $("source").textContent = j.price.source.includes("replay") ? "● spike replay" : "● live";
+      $("source").style.color = j.price.source.includes("replay") ? "var(--spike)" : "var(--low)";
+    }
+    for (const ev of j.events) {
+      lastEvent = Math.max(lastEvent, ev.id);
+      if (ev.kind === "spike") {
+        $("heard").textContent = ""; $("answer").className = "answer"; $("answer").textContent = ev.spoken;
+        $("meta").textContent = "autopilot · check_for_price_spike (no one asked)";
+        spikeCard(ev); say(ev.spoken, true);
+      }
+    }
+  } catch (e) {}
+}
+setInterval(refresh, 2500);
+refresh(); showForecast();
+</script>
+</body>
+</html>
