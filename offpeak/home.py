@@ -157,7 +157,8 @@ def run_autopilot(devices: list[str] | None = None, curve: list | None = None) -
                 set_device(state, "ev", state="scheduled", scheduled_for=entry["start"])
             else:
                 spec = state["devices"][device]
-                window = planner.cheapest_block(curve, spec["hours"])
+                # "Tonight" means done by the morning deadline, same as the car
+                window = planner.cheapest_block(curve, spec["hours"], _deadline(g["ev_ready_by_hour"]))
                 if window is None:
                     skipped.append(f"not enough price data to schedule the {spec['name'].lower()}")
                     continue

@@ -54,3 +54,11 @@ def test_no_spike_means_no_action():
 def test_manual_control():
     assert server.control_device("dryer", "start")["state"] == "running"
     assert server.control_device("toaster", "start")["error"] == "unknown_device"
+
+
+def test_appliances_finish_by_morning_deadline():
+    r = server.run_autopilot()
+    deadline_hour = home.load()["guardrails"]["ev_ready_by_hour"]
+    for p in r["plan"]:
+        last = datetime.fromisoformat(p["hours"][-1])
+        assert last.hour + 1 <= deadline_hour or last.hour >= 17  # overnight or this evening
