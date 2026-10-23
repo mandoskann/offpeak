@@ -12,7 +12,7 @@ A home energy autopilot for Alexa+. It watches live electricity prices and moves
 
 ## Track and challenges
 - **Primary track:** Alexa+
-- **Mini challenges:** none
+- **Mini challenge:** AWS Builder (Strands Agents SDK at runtime; Bedrock integrated as a provider)
 
 ---
 
