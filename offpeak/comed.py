@@ -64,6 +64,7 @@ class HourPrice:
     start: datetime
     estimated: float | None  # day-ahead estimate, cents/kWh
     actual: float | None = None  # settled real price, cents/kWh (None until settled)
+    projected: bool = False  # True if estimated from earlier hours (tomorrow not published yet)
 
     @property
     def best(self) -> float | None:
@@ -185,7 +186,9 @@ def tomorrow_prices() -> list[HourPrice]:
             body = _sample_table(tomorrow, with_actual=False) if published else ""
         else:
             body = _get(TABLE_URL, {"type": "pricingtabledaynexttomorrow"})
-        return parse_table(body, tomorrow, has_actual=False)
+        rows = parse_table(body, tomorrow, has_actual=False)
+        # Before publishing, the feed can return placeholder rows with no prices
+        return [h for h in rows if h.estimated is not None]
 
     return _cached(f"next:{tomorrow}", CACHE_TTL["nextday"], load)
 
@@ -197,9 +200,25 @@ def forward_curve(hours: int = 24) -> list[HourPrice]:
     once published. This is what the autopilot plans against.
     """
     current_hour = now().replace(minute=0, second=0, microsecond=0)
-    candidates = day_prices(current_hour.date()) + tomorrow_prices()
+    today = day_prices(current_hour.date())
+    tomorrow = tomorrow_prices()
+    candidates = today + tomorrow
     upcoming = [h for h in candidates if h.start >= current_hour and h.estimated is not None]
     upcoming.sort(key=lambda h: h.start)
+
+    # Before ComEd publishes tomorrow (~4:30pm Central), project the missing
+    # hours from the same clock hours today (the best available guess), and
+    # flag them so tools can say they're estimates.
+    if not tomorrow and len(upcoming) < hours:
+        known = {h.start for h in upcoming}
+        for h in sorted(today, key=lambda h: h.start):
+            if h.best is None:
+                continue
+            start = h.start + timedelta(days=1)
+            if start not in known and start >= current_hour:
+                upcoming.append(HourPrice(start=start, estimated=h.best, projected=True))
+                known.add(start)
+        upcoming.sort(key=lambda h: h.start)
     return upcoming[:hours]
 
 

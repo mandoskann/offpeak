@@ -114,7 +114,8 @@ def get_price_forecast(
 
     return {
         "hours": [
-            {"start": h.start.strftime("%a %I %p").replace(" 0", " "), "cents_per_kwh": h.best}
+            {"start": h.start.strftime("%a %I %p").replace(" 0", " "), "cents_per_kwh": h.best,
+             "estimated": h.projected}
             for h in curve
         ],
         "average_cents_per_kwh": avg,
@@ -125,7 +126,8 @@ def get_price_forecast(
         "note": (
             "Day-ahead estimates; real-time prices can differ."
             if tomorrow_published
-            else "Tomorrow's prices aren't published yet (ComEd posts them around 4:30pm Central)."
+            else "Tomorrow's prices aren't published yet (ComEd posts them around 4:30pm Central); "
+                 "hours after tonight are estimated from today's prices."
         ),
         "spoken": (
             f"The cheapest hour coming up is {comed.fmt_day_hour(cheapest.start)} at "
@@ -201,16 +203,14 @@ def find_cheapest_time(
         spoken += f", about {savings_pct} percent cheaper than starting now"
     spoken += "."
 
-    # Before ~4:30pm CT we only know today's prices. If the job could run
-    # later than what we can see, say so: overnight is usually cheaper.
-    known_until = curve[-1].start + timedelta(hours=1) if curve else None
-    if known_until and (deadline is None or deadline > known_until) and not comed.tomorrow_prices():
+    # Before ~4:30pm CT, tomorrow's hours are estimates (projected from today).
+    if any(h.projected for h in window.hours):
         result["note"] = (
-            "Only today's prices are published so far. Tomorrow's come out around "
-            "4:30pm Central, and overnight hours are usually cheapest, so this may improve."
+            "Some of these hours are estimates: ComEd publishes tomorrow's prices around "
+            "4:30pm Central, so this plan may shift a little once they're out."
         )
-        spoken += " Tomorrow's prices aren't out yet, so check back after 4:30 Central, overnight is usually cheaper."
-        result["prices_known_until"] = comed.fmt_day_hour(known_until)
+        result["uses_estimated_prices"] = True
+        spoken += " Tomorrow's prices come out around 4:30 Central, so I'll double check then."
 
     result["spoken"] = spoken
     return result

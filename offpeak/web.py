@@ -14,10 +14,12 @@ Run:  python -m offpeak.web      then open http://127.0.0.1:8080 in Chrome
 from __future__ import annotations
 
 import json
+import logging
 import os
 import threading
 import time
 import uuid
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import uvicorn
@@ -29,22 +31,52 @@ from strands.tools.mcp import MCPClient
 from offpeak import agent as offpeak_agent
 from offpeak import home
 
+# Strands logs a long traceback when the MCP server isn't up yet; we handle that ourselves
+logging.getLogger("strands.tools.mcp.mcp_client").setLevel(logging.CRITICAL)
+
 STATIC = Path(__file__).resolve().parent / "static"
 WATCH_SECONDS = float(os.getenv("OFFPEAK_WATCH_SECONDS", "60"))
 REPLAY_WATCH_SECONDS = float(os.getenv("OFFPEAK_REPLAY_WATCH_SECONDS", "5"))
 
-app = FastAPI(title="OffPeak · Simulated Alexa+")
 
-mcp = MCPClient(url=offpeak_agent.MCP_URL)
+mcp: MCPClient | None = None
+_mcp_lock = threading.RLock()
 _agent = None
 _agent_lock = threading.Lock()
 _events: list[dict] = []  # autopilot notifications for the UI, newest last
 _events_lock = threading.Lock()
 
 
+def ensure_mcp() -> MCPClient:
+    """Connect (or reconnect) to the OffPeak MCP server.
+
+    If the server was restarted, the old session is dead; start a fresh one
+    and drop the agent so it's rebuilt with tools bound to the new session.
+    """
+    global mcp, _agent
+    with _mcp_lock:
+        if mcp is not None and mcp._is_session_active():
+            return mcp
+        if mcp is not None:
+            try:
+                mcp.stop(None, None, None)
+            except Exception:
+                pass
+        client = MCPClient(url=offpeak_agent.MCP_URL)
+        client.start()  # raises if the server isn't running
+        mcp = client
+        _agent = None
+        print(f"[web] connected to MCP server at {offpeak_agent.MCP_URL}")
+        return mcp
+
+
 def call_tool(name: str, args: dict | None = None) -> dict:
     """Call an OffPeak MCP tool and return its JSON result."""
-    result = mcp.call_tool_sync(str(uuid.uuid4()), name, args or {})
+    try:
+        result = ensure_mcp().call_tool_sync(str(uuid.uuid4()), name, args or {})
+    except Exception:
+        reset_mcp()
+        result = ensure_mcp().call_tool_sync(str(uuid.uuid4()), name, args or {})
     if result.get("structuredContent"):
         data = result["structuredContent"]
         return data.get("result", data) if isinstance(data, dict) else data
@@ -58,10 +90,24 @@ def call_tool(name: str, args: dict | None = None) -> dict:
     return {}
 
 
+def reset_mcp() -> None:
+    """Force a reconnect on the next call."""
+    global mcp, _agent
+    with _mcp_lock:
+        if mcp is not None:
+            try:
+                mcp.stop(None, None, None)
+            except Exception:
+                pass
+        mcp = None
+        _agent = None
+
+
 def get_agent():
     global _agent
+    client = ensure_mcp()
     if _agent is None:
-        _agent = offpeak_agent.build_agent(mcp)
+        _agent = offpeak_agent.build_agent(client)
     return _agent
 
 
@@ -96,16 +142,27 @@ def watcher() -> None:
                         "saved_dollars": result.get("saved_dollars", 0)})
 
 
-@app.on_event("startup")
 def startup() -> None:
-    mcp.start()
+    try:
+        ensure_mcp()
+    except Exception as exc:
+        print(f"[web] MCP server not reachable yet ({exc}). Start it with: python -m offpeak.server")
     threading.Thread(target=watcher, daemon=True).start()
-    print(f"OffPeak web ready · {offpeak_agent.model_label()} · open http://127.0.0.1:{PORT}")
+    print(f"OffPeak web ready ({offpeak_agent.model_label()}). Open http://127.0.0.1:{PORT}")
 
 
-@app.on_event("shutdown")
 def shutdown() -> None:
-    mcp.stop(None, None, None)
+    reset_mcp()
+
+
+@asynccontextmanager
+async def lifespan(_app):
+    startup()
+    yield
+    shutdown()
+
+
+app = FastAPI(title="OffPeak: simulated Alexa+", lifespan=lifespan)
 
 
 # ---------------------------------------------------------------- API
@@ -124,17 +181,24 @@ def ask(body: Ask):
     if not text:
         return {"answer": "", "tools": []}
     with _agent_lock:  # one conversation at a time
-        try:
-            a = get_agent()
-            since = len(a.messages)
-            t0 = time.perf_counter()
-            result = a(offpeak_agent.with_clock(text))
-            secs = round(time.perf_counter() - t0, 1)
-            tools = offpeak_agent.tool_results(a, since)
-        except Exception as exc:
-            return JSONResponse({"error": f"{type(exc).__name__}: {exc}",
-                                 "answer": "Sorry, I can't reach my brain right now. Check the model credentials."},
-                                status_code=500)
+        for attempt in (1, 2):
+            try:
+                a = get_agent()
+                since = len(a.messages)
+                t0 = time.perf_counter()
+                result = a(offpeak_agent.with_clock(text))
+                secs = round(time.perf_counter() - t0, 1)
+                tools = offpeak_agent.tool_results(a, since)
+                break
+            except Exception as exc:
+                msg = str(exc).lower()
+                lost_mcp = "MCP" in type(exc).__name__ or "client session" in msg or "mcp server" in msg
+                if attempt == 1 and lost_mcp:
+                    reset_mcp()  # server was restarted: reconnect and try once more
+                    continue
+                hint = ("I can't reach the OffPeak server. Make sure it's running."
+                        if lost_mcp else "I can't reach the AI model right now. Check the model settings in .env.")
+                return JSONResponse({"error": f"{type(exc).__name__}: {exc}", "answer": hint}, status_code=500)
     return {"answer": str(result).strip(), "tools": tools, "seconds": secs}
 
 

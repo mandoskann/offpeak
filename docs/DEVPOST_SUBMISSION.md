@@ -42,6 +42,7 @@ OffPeak is an agent for Alexa+ that runs your home's electricity on autopilot.
 - **State.** The simulated home (devices, guardrails, plan, action log, savings) persists to a JSON file. Device changes all go through one function, so a real integration can replace the simulation later.
 - **Simulated Alexa+ experience.** A browser Echo Show with voice in (Web Speech API), voice out (speech synthesis), a light bar, and visual cards.
 - 23 automated tests cover parsing, planning, autopilot, persistence, and the spike reaction.
+- I'm a finance student, not a software engineer. I designed the product and directed the build, and wrote the code with Claude as an AI coding assistant, running and testing every piece myself.
 
 ### Challenges I ran into
 - **Hour-ending vs. hour-starting.** ComEd labels prices by the hour they *end*, and the last hour of the day is labeled "12:00 AM." Getting midnight right across today and tomorrow took careful parsing and tests.

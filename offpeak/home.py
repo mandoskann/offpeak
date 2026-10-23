@@ -166,6 +166,9 @@ def run_autopilot(devices: list[str] | None = None, curve: list | None = None) -
                 set_device(state, device, state="scheduled", scheduled_for=entry["start"])
             plan.append(entry)
 
+        uses_estimates = any(
+            h.projected for h in curve if any(h.start.isoformat() in p["hours"] for p in plan)
+        )
         state["plan"] = plan
         total_saved = round(sum(p["saved_dollars"] for p in plan), 2)
         total_cost = round(sum(p["cost_dollars"] for p in plan), 2)
@@ -182,8 +185,12 @@ def run_autopilot(devices: list[str] | None = None, curve: list | None = None) -
         spoken += f"That's about ${total_cost:.2f} total, ${total_saved:.2f} less than running it all now."
     if skipped:
         spoken += " Note: " + "; ".join(skipped) + "."
-    return {"plan": plan, "total_cost_dollars": total_cost, "total_saved_dollars": total_saved,
-            "skipped": skipped, "spoken": spoken.strip()}
+    result = {"plan": plan, "total_cost_dollars": total_cost, "total_saved_dollars": total_saved,
+              "skipped": skipped, "spoken": spoken.strip()}
+    if uses_estimates:
+        result["note"] = ("Overnight prices are estimated until ComEd publishes tomorrow's "
+                          "prices around 4:30pm Central; the autopilot re-checks then.")
+    return result
 
 
 # ---------------------------------------------------------------- spikes

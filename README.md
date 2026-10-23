@@ -107,5 +107,8 @@ npx @modelcontextprotocol/inspector
 - **ComEd Hourly Pricing:** public, no key. Real-time 5-minute prices, hourly day-ahead estimates, and settled actuals for ComEd Hourly Pricing customers (PJM ComEd zone). See ComEd's API terms of service.
 - Prices are the **supply** portion only (cents/kWh). Delivery charges are separate and don't depend on the time of day.
 
+## How it was built
+Designed and directed by Roan Drabo. Code was written with help from Claude as an AI coding assistant, with every piece run and tested locally.
+
 ## License
 MIT. See [LICENSE](LICENSE).

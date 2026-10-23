@@ -68,6 +68,7 @@
   .hours { display: flex; height: 64px; border-radius: 10px; overflow: hidden; position: relative; }
   .hour { flex: 1; position: relative; transition: background .4s, transform .4s; }
   .hour + .hour { border-left: 1px solid rgba(255,255,255,.55); }
+  .hour.est { background-image: repeating-linear-gradient(135deg, rgba(255,255,255,.28) 0 5px, transparent 5px 10px); }
   .hour.night::after { content: ""; position: absolute; inset: 0; background: var(--night); }
   .hour.planned { box-shadow: inset 0 -7px 0 var(--ink); }
   .hour.now { outline: 3px solid var(--ink); outline-offset: -3px; z-index: 1; }
@@ -157,6 +158,7 @@
         <span><i style="background:var(--normal)"></i>Normal</span>
         <span><i style="background:var(--pricey)"></i>Pricey</span>
         <span><i style="background:var(--spike)"></i>Spike</span>
+        <span id="estlegend" hidden><i style="background:var(--normal);background-image:repeating-linear-gradient(135deg, rgba(255,255,255,.5) 0 3px, transparent 3px 6px)"></i>Estimated until tomorrow's prices are posted</span>
       </div>
     </div>
 
@@ -196,7 +198,7 @@ const screen = $("screen");
 let lastEvent = 0, busy = false, forecast = null, plannedHours = new Set(), movedDevices = new Set(), resting = true;
 
 /* ---------- words and icons ---------- */
-const word = (c) => c < 3 ? "Cheap" : c < 6 ? "Normal" : c < 10 ? "Pricey" : "Spike";
+const word = (c) => c < 0 ? "Below zero" : c < 3 ? "Cheap" : c < 6 ? "Normal" : c < 10 ? "Pricey" : "Spike";
 const color = (c) => c < 3 ? "var(--cheap)" : c < 6 ? "var(--normal)" : c < 10 ? "var(--pricey)" : "var(--spike)";
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[m]));
 const ICON = {
@@ -238,6 +240,7 @@ function restingLine(price) {
   const now = price.current_hour_average_cents_per_kwh;
   const cheap = forecast.cheapest;
   const lvl = word(now).toLowerCase();
+  if (now < 0) return "Power's below zero right now. You're getting paid to use it, so it's a great time to run anything.";
   const first = lvl === "cheap" ? "Power's cheap right now." :
                 lvl === "normal" ? "Power's at a normal price right now." :
                 lvl === "pricey" ? "Power's pricey right now." : "Power's spiking right now.";
@@ -267,13 +270,14 @@ function drawBand(home, livePrice) {
   const hrs = (forecast && forecast.hours) || [];
   if (!hrs.length) return;
   const n = hrs.length;
+  $("estlegend").hidden = !hrs.some((h) => h.estimated);
   const spikeNow = livePrice && livePrice.current_hour_average_cents_per_kwh >= 10;
   $("hours").innerHTML = hrs.map((h, i) => {
     const c = i === 0 && spikeNow ? livePrice.current_hour_average_cents_per_kwh : h.cents_per_kwh;
     const hr = parseInt(h.start.split(" ")[1]); const pm = h.start.endsWith("PM");
     const h24 = (hr % 12) + (pm ? 12 : 0);
     const night = h24 >= 21 || h24 < 6;
-    const cls = ["hour", night ? "night" : "", i === 0 ? "now" : "", plannedHours.has(h.start) ? "planned" : ""].join(" ");
+    const cls = ["hour", h.estimated ? "est" : "", night ? "night" : "", i === 0 ? "now" : "", plannedHours.has(h.start) ? "planned" : ""].join(" ");
     return `<div class="${cls}" style="background:${color(c)}" title="${esc(h.start)}: ${c}¢"></div>`;
   }).join("");
   $("ticks").innerHTML = hrs.map((h, i) => {
@@ -433,7 +437,6 @@ async function refresh() {
       drawBand(j.home, j.price);
     }
   }
-  $("fine").textContent = `A simulated Alexa+ display running ${j.model}. The car, thermostat, dishwasher, and dryer are simulated; prices are live from ComEd's hourly pricing program unless a price spike is playing.`;
 }
 
 (async () => { await loadForecast(); await refresh(); })();

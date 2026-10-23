@@ -65,8 +65,12 @@ def test_forward_curve_before_tomorrow_published(monkeypatch):
     freeze(monkeypatch, 2026, 10, 14, 11, 30)  # 11:30am, tomorrow not out yet
     curve = comed.forward_curve(24)
     assert curve[0].start.hour == 11
-    assert len(curve) == 13  # 11am..11pm today only
+    assert len(curve) == 24
     assert comed.tomorrow_prices() == []
+    real = [h for h in curve if not h.projected]
+    assert len(real) == 13  # 11am..11pm today are real day-ahead prices
+    assert all(h.projected for h in curve[13:])  # overnight onward is estimated
+    assert all(b.start - a.start == timedelta(hours=1) for a, b in zip(curve, curve[1:]))
 
 
 def test_forward_curve_after_tomorrow_published(monkeypatch):
@@ -154,10 +158,11 @@ def test_day_prices_tool(monkeypatch):
     assert server.get_day_prices("yesterday")["error"] == "bad_date"
 
 
-def test_find_cheapest_time_warns_when_tomorrow_unpublished(monkeypatch):
+def test_find_cheapest_time_estimates_overnight_when_tomorrow_unpublished(monkeypatch):
     freeze(monkeypatch, 2026, 10, 14, 11, 0)  # morning: only today's prices exist
     result = server.find_cheapest_time(4, finish_by_hour=7, can_split=True)
-    assert "note" in result and "4:30" in result["spoken"]
+    assert "tonight" in result["start"]  # plans overnight using estimated prices
+    assert result["uses_estimated_prices"] is True and "4:30" in result["spoken"]
     freeze(monkeypatch, 2026, 10, 14, 18, 0)  # evening: tomorrow published, no warning
     comed.clear_cache()
     assert "note" not in server.find_cheapest_time(4, finish_by_hour=7, can_split=True)
@@ -172,3 +177,14 @@ def test_agent_skill_is_valid():
                  "run_autopilot", "get_home_status", "update_settings", "control_device",
                  "check_for_price_spike", "start_spike_replay"]:
         assert tool in skill.instructions, f"skill doesn't mention {tool}"
+
+
+def test_placeholder_rows_dont_count_as_published(monkeypatch):
+    freeze(monkeypatch, 2026, 10, 14, 11, 0)
+    monkeypatch.setenv("OFFPEAK_OFFLINE", "0")
+    monkeypatch.setattr(comed, "_get", lambda url, params: (
+        "<tr><td>1:00 AM</td><td>n/a</td></tr><tr><td>2:00 AM</td><td></td></tr>"
+        if params.get("type") == "pricingtabledaynexttomorrow"
+        else comed._sample_table(comed.now().date(), with_actual=True)))
+    assert comed.tomorrow_prices() == []
+    assert len(comed.forward_curve(24)) == 24  # overnight still estimated
