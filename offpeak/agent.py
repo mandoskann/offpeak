@@ -89,8 +89,8 @@ def build_model():
 
 def model_label() -> str:
     if provider() == "anthropic":
-        return f"Anthropic API · {os.getenv('OFFPEAK_ANTHROPIC_MODEL', 'claude-sonnet-4-6')}"
-    return f"Amazon Bedrock · {MODEL_ID}"
+        return f"Claude via the Anthropic API ({os.getenv('OFFPEAK_ANTHROPIC_MODEL', 'claude-sonnet-4-6')})"
+    return f"Claude on Amazon Bedrock ({MODEL_ID})"
 
 
 def tool_results(agent: Agent, since: int) -> list[dict]:

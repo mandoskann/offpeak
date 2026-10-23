@@ -48,7 +48,7 @@
 ### Scene 6: How it works (2:10–2:40)
 *Show the README architecture diagram, or the repo in a browser.*
 
-> "Under the hood, there's a self-hosted MCP server over Streamable HTTP with ten tools on live ComEd prices. An Agent Skill defines how OffPeak talks and decides. Claude on Amazon Bedrock, through the Strands Agents SDK, runs the agent. A watcher calls the spike check on its own, so the autopilot acts without being asked. The devices are simulated for now, but they're behind one swappable function, and real thermostats and EV chargers are next."
+> "Under the hood, there's a self-hosted MCP server over Streamable HTTP with ten tools on live ComEd prices. An Agent Skill defines how OffPeak talks and decides. Claude, through the Strands Agents SDK, runs the agent. A watcher calls the spike check on its own, so the autopilot acts without being asked. The devices are simulated for now, but they're behind one swappable function, and real thermostats and EV chargers are next."
 
 > "OffPeak. Your home, trading power for you."
 
@@ -58,4 +58,3 @@
 - **The agent is slow or errors:** cut the clip and re-record that scene only.
 - **Live prices are boring:** that's fine. The spike replay is the dramatic part.
 - **Voice input misses a word:** type the question instead. It works the same, and you can say "or just type it."
-- **If you used the Anthropic API instead of Bedrock:** in Scene 6, say "Claude through the Strands Agents SDK" and drop "on Amazon Bedrock."

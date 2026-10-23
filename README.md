@@ -18,7 +18,7 @@ Built for the **Alexa+ track** of the [Build, Ship, Shape: Amazon Developer Hack
 Simulated Alexa+ (browser: voice in/out, Echo Show-style cards)       offpeak/web.py + static/index.html
    │                                   ▲
    ▼                                   │ autopilot announcements
-Agent: Strands Agents SDK + Claude on Amazon Bedrock                    offpeak/agent.py
+Agent: Strands Agents SDK + Claude (Anthropic API or Amazon Bedrock)   offpeak/agent.py
    system prompt = Agent Skill (skills/offpeak/SKILL.md)
    │  MCP client, Streamable HTTP          Watcher: calls check_for_price_spike
    ▼                                       on its own every few minutes
@@ -79,7 +79,9 @@ python -m offpeak.web        # open http://127.0.0.1:8080 in Chrome
 ```
 Click the mic (or press space) and talk, or type. Click **Replay a price spike** to watch the autopilot act on its own.
 
-**Model access.** By default the agent uses Claude on **Amazon Bedrock**: run `aws login`, and make sure your account has access to a Claude model in Bedrock (us-east-1). Alternatively set `ANTHROPIC_API_KEY` in `.env` to use the Anthropic API directly.
+**Model access.** The agent runs Claude through the Strands Agents SDK, using either provider (one setting in `.env`):
+- **Anthropic API** (used for the demo): set `ANTHROPIC_API_KEY=...` and `OFFPEAK_PROVIDER=anthropic`.
+- **Amazon Bedrock:** run `aws login` and make sure your account can call a Claude model in us-east-1 (`OFFPEAK_MODEL_ID`). Bedrock was the original target; my new AWS account was blocked from Bedrock before the deadline (see `docs/FRICTION_LOG.md`), so the demo runs on the Anthropic API. Switching back is one line.
 
 Talk to the agent in the terminal instead:
 ```bash

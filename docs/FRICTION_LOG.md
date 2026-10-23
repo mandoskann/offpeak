@@ -47,7 +47,7 @@ Severity: 🔴 Blocker · 🟠 Major · 🟡 Minor · ⚪ Papercut
 - **Expected:** A recovery path that gets a developer back to building within minutes.
 - **Actual:** No way to reach Bedrock the day before the deadline.
 - **Severity:** 🔴 Blocker (for the Bedrock path)
-- **Workaround:** Made the agent provider-agnostic. Strands' `AnthropicModel` serves as a fallback behind one environment variable (`OFFPEAK_PROVIDER`).
+- **Workaround:** Created a new AWS account (see entry 7), and made the agent provider-agnostic so Strands' `AnthropicModel` can stand in, behind one environment variable (`OFFPEAK_PROVIDER`).
 - **Suggestion:** Surface account-recovery troubleshooting directly in the `aws login` browser flow, and mention Bedrock API keys as a fast credential option in hackathon onboarding.
 
 ### 5. Agent Skills progressive disclosure adds latency on voice
@@ -71,6 +71,17 @@ Severity: 🔴 Blocker · 🟠 Major · 🟡 Minor · ⚪ Papercut
 - **Severity:** 🟠 Major
 - **Workaround:** Built a browser Echo Show simulation that uses the same MCP server and agent.
 - **Suggestion:** A hosted Alexa+ MCP test console, and a dev mode that skips account linking for a developer's own account.
+
+### 7. New AWS account blocked from Bedrock with "Operation not allowed"
+- **Date:** Oct 22, 2026
+- **Tool:** Amazon Bedrock (Converse API)
+- **Task:** Call Claude on Bedrock from a newly created AWS account.
+- **Steps:** Created a new account, signed in with `aws login` (`aws sts get-caller-identity` worked), then ran `aws bedrock-runtime converse` in us-east-1.
+- **Expected:** A reply, or a clear message saying what access is missing.
+- **Actual:** First `AccessDeniedException: Your account is currently being verified`. Minutes later, `ValidationException: Operation not allowed` for `global.anthropic.claude-sonnet-4-6` and for `us.amazon.nova-pro-v1:0`. No hint at the cause, how long it lasts, or how to fix it.
+- **Severity:** 🔴 Blocker (no Bedrock for the demo)
+- **Workaround:** Switched the agent to Claude via the Anthropic API (Strands `AnthropicModel`), a one-line `.env` change thanks to the provider-agnostic design.
+- **Suggestion:** Return an error that names the restriction ("new account: Bedrock available after N hours" or "submit a request here"), and show Bedrock eligibility status in the console. A hackathon credit or allowlist path for registered participants would also help.
 
 ---
 
